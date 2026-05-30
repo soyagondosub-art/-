@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>HOSPITAL LABYRINTH: SHADOWS & VOICES EDITION</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', sans-serif; user-select: none; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        
+        .glitch-active { animation: shake 0.15s infinite alternate; }
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            100% { transform: translate(-1px, -2px) rotate(0.5deg); }
+        }
+
+        #ui-layer {
+            position: absolute; top: 20px; left: 20px; 
+            color: #fff; background: rgba(10, 15, 12, 0.95); 
+            padding: 20px; border-radius: 5px; border: 2px solid #ff3333;
+            font-size: 14px; line-height: 1.8; z-index: 100;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.4);
+            pointer-events: none;
+        }
+        #floor-display { font-size: 18px; font-weight: bold; color: #ff3333; text-shadow: 0 0 5px #ff0000; }
+        
+        /* スタミナバー：画面最下部中央 */
+        #stamina-container {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            width: 300px; height: 10px; background: rgba(34, 34, 34, 0.7); 
+            border: 2px solid #555; border-radius: 5px; overflow: hidden; z-index: 180;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5); pointer-events: none;
+        }
+        #stamina-bar { width: 100%; height: 100%; background: #00ffaa; transition: width 0.05s linear; }
+
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #030303; display: flex; justify-content: center; align-items: center;
+            flex-direction: column; z-index: 300; color: white; text-align: center;
+        }
+        #screen-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center; flex-direction: column;
+            z-index: 200; display: none; text-shadow: 0 0 10px #000; color: white; background: rgba(0,0,0,0.85);
+        }
+        .btn { margin-top:20px; padding:12px 30px; font-size:18px; cursor:pointer; background:#111; color:#ff3333; border:2px solid #ff3333; border-radius:4px; font-weight:bold; letter-spacing: 2px; }
+        .btn:hover { background:#ff3333; color:#000; box-shadow: 0 0 15px #ff3333; }
+        
+        #minimap-container {
+            position: absolute; top: 20px; right: 20px;
+            width: 160px; height: 160px; 
+            background: rgba(0, 5, 2, 0.95);
+            border: 2px solid #ff3333;
+            border-radius: 4px;
+            overflow: hidden;
+            z-index: 150;
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
+        }
+        #minimap { width: 100%; height: 100%; }
+
+        #diary-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.97); display: none; justify-content: center;
+            align-items: center; flex-direction: column; z-index: 250;
+        }
+        #diary-box {
+            background: #070707; border: 2px solid #ffaa00; padding: 35px;
+            max-width: 550px; width: 80%; border-radius: 6px;
+            box-shadow: 0 0 30px rgba(255, 170, 0, 0.3); line-height: 2.0;
+            font-family: 'Hiragino Mincho ProN', 'MS Mincho', serif;
+        }
+        #diary-content { white-space: pre-wrap; font-size: 16px; color: #eddcc4; letter-spacing: 1.5px; }
+        
+        #guide-notice {
+            position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+            color: #ffaa44; font-size: 13px; font-weight: bold; z-index: 100; text-align: center; 
+            background: rgba(0,0,0,0.9); padding: 8px 20px; border-radius: 4px; border: 1px solid #ffaa44;
+            letter-spacing: 1px; pointer-events: none;
+        }
+
+        #yusei-alert {
+            position: absolute; bottom: 110px; left: 50%; transform: translateX(-50%);
+            color: #ff2200; font-size: 16px; font-weight: bold; z-index: 110; text-align: center;
+            background: rgba(10, 0, 0, 0.95); padding: 12px 30px; border-radius: 4px; border: 2px solid #ff2200;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.7); display: none;
+            animation: pulse 0.6s infinite alternate; pointer-events: none;
+        }
+        @keyframes pulse { from { opacity: 0.4; transform: translateX(-50%) scale(0.96); } to { opacity: 1.0; transform: translateX(-50%) scale(1.04); } }
+
+        #curse-overlay {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            pointer-events: none; z-index: 280; display: none;
+            justify-content: center; align-items: center;
+            background: rgba(20, 0, 5, 0.3);
+            mix-blend-mode: color-burn;
+        }
+        #curse-ghost { width: 80vh; height: 80vh; opacity: 0; transition: opacity 0.1s linear; }
+
+        /* 最恐フォント：クロセ目視時のランダムセリフUIコンテナ */
+        #chaser-speech-overlay {
+            position: absolute; top: 35%; left: 50%; transform: translate(-50%, -50%);
+            color: #ff0011; font-family: 'Hiragino Mincho ProN', 'MS Mincho', serif;
+            font-size: 52px; font-weight: bold; letter-spacing: 10px; z-index: 220;
+            pointer-events: none; display: none; text-align: center;
+            text-shadow: 0 0 4px #000, 0 0 15px #ff0000, 0 0 35px #550000;
+            animation: horrorPulse 0.38s infinite alternate;
+            white-space: nowrap;
+        }
+        @keyframes horrorPulse {
+            0% { transform: translate(-50%, -50%) scale(0.94) skewX(-4deg); opacity: 0.8; filter: blur(0.5px); }
+            100% { transform: translate(-50%, -50%) scale(1.06) skewX(4deg); opacity: 1.0; filter: blur(1.5px); }
+        }
+    </style>
+</head>
+<body id="game-body">
+
+    <div id="start-screen">
+        <h1 style="color: #ff0000; font-size: 42px; letter-spacing: 10px; margin-bottom: 5px; text-shadow: 0 0 25px #ff0000;">廃病院の怪異：絶叫</h1>
+        <p style="color: #8a948f; font-size: 15px; margin-bottom: 25px; letter-spacing: 1px;">バグ修正＆輝度調整・完全版</p>
+        <p style="color: #999; font-size: 13px; max-width: 600px; line-height: 1.6; margin-bottom: 10px;">
+            広い灰色の通路、15%確率急襲、足音システムを完全搭載。<br>
+            クロセと直接視線が合うと、5つの最恐ワードがランダムで脳内に響き渡ります。
+        </p>
+        <button id="start-btn" class="btn">精神を刻み、潜入する</button>
+    </div>
+
+    <div id="ui-layer">
+        <span id="floor-display">【現在位置: 廃病院 1階】</span><br>
+        迷路の奥にある<span style="color:#ffff00;font-weight:bold;">「友人の日記（🟨）」</span>を回収し、<br>
+        スタート地点（緑光）まで生きて帰還せよ。<br><br>
+        移動: <span style="color:#00ff00;font-weight:bold;">W, A, S, D</span> / 視点: <span style="color:#00ffff;font-weight:bold;">マウス</span><br>
+        全力疾走: <span style="color:#ff3366;font-weight:bold;">Shiftキー長押し</span>
+    </div>
+
+    <div id="stamina-container"><div id="stamina-bar"></div></div>
+
+    <div id="guide-notice">【生存の鍵】2階中央の一方通行の段差（青）は、飛び降りると戻れません。敵をハメるのに使え。</div>
+    
+    <div id="yusei-alert">⚠️ 背後に気配を感じる。直ちに走って逃げろ…！</div>
+
+    <!-- 目視セリフ表示用コンテナ -->
+    <div id="chaser-speech-overlay"></div>
+
+    <div id="curse-overlay"><canvas id="curse-ghost"></canvas></div>
+    <div id="minimap-container"><canvas id="minimap"></canvas></div>
+
+    <div id="diary-overlay">
+        <div id="diary-box"><div id="diary-content"></div></div>
+        <button id="diary-close-btn" class="btn" style="color:#00ff00; border-color:#00ff00;">日記を伏せて立ち上がる</button>
+    </div>
+
+    <div id="screen-overlay">
+        <div id="msg" style="font-size: 26px; font-weight: bold; text-align: center; padding: 0 20px; line-height: 1.8;"></div>
+        <button id="action-btn" class="btn" style="color:#fff; border-color:#fff;">深淵へ進む</button>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+    
+    <script type="module">
+        import * as THREE from 'three';
+
+        // グリッドサイズ（通路幅を非常に広く確保するためのスケーリング係数）
+        const SCALE = 2.5;
+
+        // --- 迷路完全マップデータ (0=通路, 1=通常壁, 2=南向き一方通行段差, 3=北向き一方通行段差) ---
+        const mazes = {
+            1: [
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+                [1,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
+                [1,0,1,0,1,0,1,1,1,0,1,0,1,0,1],
+                [1,0,1,0,0,0,1,0,1,0,0,0,1,0,1],
+                [1,0,1,1,1,0,1,0,1,0,1,1,1,0,1], 
+                [1,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
+                [1,1,1,0,1,1,1,0,1,1,1,0,1,0,1],
+                [1,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
+                [1,0,1,1,1,0,1,1,1,0,1,1,1,0,1], 
+                [1,0,1,0,0,0,1,0,1,0,0,0,0,0,1],
+                [1,0,1,0,1,1,1,0,1,1,1,1,1,0,1],
+                [1,0,1,0,1,0,0,0,0,0,1,0,1,0,1],
+                [1,0,1,0,1,0,1,1,1,0,1,0,1,0,1],
+                [1,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+            ],
+            2: [
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+                [1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1], 
+                [1,0,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1],
+                [1,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,1],
+                [1,0,1,1,1,1,1,0,1,0,1,1,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+                [1,1,1,2,1,1,1,0,1,0,1,1,1,3,1,1,1], 
+                [1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1],
+                [1,0,1,1,1,0,1,1,1,1,1,0,1,1,1,0,1],
+                [1,0,1,0,0,0,1,0,0,0,1,0,0,0,1,0,1],
+                [1,0,1,0,1,1,1,1,1,1,1,1,1,0,1,0,1],
+                [1,0,1,0,1,0,0,0,0,0,0,0,1,0,1,0,1],
+                [1,0,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1],
+                [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1],
+                [1,1,1,1,1,0,1,0,1,0,1,0,1,1,1,1,1],
+                [1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+            ],
+            3: [
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+                [1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+                [1,0,1,0,1,0,1,1,1,1,1,1,1,1,1,0,1,0,1,0,1],
+                [1,0,1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1,0,1],
+                [1,0,1,1,1,1,1,0,1,1,1,1,1,0,1,1,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,1],
+                [1,1,1,0,1,1,1,0,1,0,1,0,1,0,1,1,1,0,1,1,1],
+                [1,0,1,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,1,0,1],
+                [1,0,1,0,1,1,1,0,1,1,1,1,1,0,1,0,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1],
+                [1,0,1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,1],
+                [1,0,1,0,1,1,1,0,1,1,1,1,1,0,1,1,1,0,1,0,1],
+                [1,0,1,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,1,0,1],
+                [1,0,1,1,1,0,1,1,1,0,1,0,1,1,1,0,1,0,1,0,1],
+                [1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+                [1,0,1,1,1,0,1,0,1,1,1,1,1,0,1,0,1,1,1,0,1],
+                [1,0,1,0,0,0,1,0,0,0,0,0,1,0,0,0,1,0,1,0,1],
+                [1,0,1,0,1,1,1,0,1,1,1,0,1,1,1,1,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+            ]
+        };
+
+        const floorConfigs = {
+            1: { startGrid: {x: 1, z: 13}, diaryGrid: {x: 12, z: 1} },
+            2: { startGrid: {x: 1, z: 15}, diaryGrid: {x: 15, z: 1} },
+            3: { startGrid: {x: 1, z: 19}, diaryGrid: {x: 19, z: 1} }
+        };
+
+        const diaryTexts = {
+            1: "〇月×日\nこの病院の地下実験の噂は本当だった。\n一度入ったら、構造が勝ために変わる迷路のようだ。\n何かが後ろから追いかけてくる足音が聞こえる…。",
+            2: "〇月△日\n2階に上がれたが、さらに狂っている。\nいくつかの通路には奇妙な「段差」があり、一方通行だ。\n飛び降りればアイツを引き離せるが、進む先を間違えれば袋の鼠になる…。",
+            3: "×月×日\nついに最上階。だが、ここは奴の本拠地だ。\n日記を手に入れた瞬間、あの悪夢「ゆうせい」が解き放たれる。\n戻る道は一つしかない。頼む、誰か私を救ってくれ。"
+        };
+
+        // ジェミニー厳選の最恐セリフ上位5選
+        const horrorVoices = [
+            "見 つ け た よ",
+            "そ こ に い た ん だ ね",
+            "ど こ へ 逃 げ る の ？",
+            "ね ぇ 、 後 ろ 見 て ？",
+            "ｱ ﾂ ｹ ﾞ ﾀ ｱ ｱ ｱ"
+        ];
+        let isChaserLookingAtPlayer = false; 
+
+        let currentFloor = 1;
+        let mapData = mazes[currentFloor];
+        let config = floorConfigs[currentFloor];
+
+        // --- ゲーム状態管理 ---
+        let gameActive = false;
+        let hasDiary = false;
+        let isDead = false;
+
+        // スタミナ
+        let stamina = 100;
+        let isSprinting = false;
+        let staminaExhausted = false;
+
+        // 振り返り検知用
+        let lastYaw = 0;
+
+        // --- サウンドシステム ---
+        let audioCtx = null;
+        let nextHeartbeatTime = 0;
+        let nextChaserFootTime = 0;
+        let nextPlayerFootTime = 0; 
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        // プレイヤー自身の足音
+        function playPlayerFootstep(isRunning) {
+            if (!audioCtx) return;
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            
+            osc.frequency.setValueAtTime(isRunning ? 110 : 85, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(30, audioCtx.currentTime + 0.08);
+            
+            gain.gain.setValueAtTime(isRunning ? 0.15 : 0.08, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+            
+            osc.start(); osc.stop(audioCtx.currentTime + 0.09);
+        }
+
+        function playHeartbeat(vol) {
+            if (!audioCtx) return;
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.frequency.setValueAtTime(55, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.12);
+            gain.gain.setValueAtTime(vol * 0.8, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+            setTimeout(() => {
+                if (isDead) return;
+                let osc2 = audioCtx.createOscillator(); let gain2 = audioCtx.createGain();
+                osc2.connect(gain2); gain2.connect(audioCtx.destination);
+                osc2.frequency.setValueAtTime(50, audioCtx.currentTime);
+                osc2.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 0.15);
+                gain2.gain.setValueAtTime(vol * 0.5, audioCtx.currentTime);
+                gain2.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                osc2.start(); osc2.stop(audioCtx.currentTime + 0.18);
+            }, 160);
+        }
+
+        function playChaserFootstep(vol) {
+            if (!audioCtx) return;
+            let bufferSize = audioCtx.sampleRate * 0.1;
+            let buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            let data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; }
+            let noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+            let filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.setValueAtTime(180, audioCtx.currentTime);
+            let gain = audioCtx.createGain(); gain.gain.setValueAtTime(vol * 0.4, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+            noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+            noise.start(); noise.stop(audioCtx.currentTime + 0.1);
+        }
+
+        // --- Three.js セットアップ ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050505);
+        scene.fog = new THREE.FogExp2(0x050505, 0.13); // フォグを少し弱めて奥を見やすく調整
+
+        const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 100);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        // クロセ襲撃顔キャンバス
+        const ghostCanvas = document.getElementById('curse-ghost');
+        const gCtx = ghostCanvas.getContext('2d');
+        ghostCanvas.width = 256; ghostCanvas.height = 256;
+        function drawGhostFace() {
+            gCtx.clearRect(0, 0, 256, 256);
+            gCtx.fillStyle = 'rgba(5, 5, 5, 0.6)'; gCtx.fillRect(0,0,256,256);
+            gCtx.strokeStyle = '#ff0022'; gCtx.lineWidth = 4;
+            gCtx.beginPath(); gCtx.arc(128, 120, 65, 0, Math.PI*2); gCtx.stroke();
+            gCtx.fillStyle = '#ff0000';
+            gCtx.beginPath(); gCtx.arc(102, 105, 12, 0, Math.PI*2); gCtx.fill();
+            gCtx.beginPath(); gCtx.arc(154, 105, 12, 0, Math.PI*2); gCtx.fill();
+            gCtx.beginPath(); gCtx.moveTo(95, 160); gCtx.quadraticCurveTo(128, 195, 161, 160); gCtx.stroke();
+        }
+        drawGhostFace();
+
+        // 💡 【明るさ調整】環境光（ベースの明るさ）を少し強化
+        const ambientLight = new THREE.AmbientLight(0x222222, 0.8);
+        scene.add(ambientLight);
+
+        // 💡 【明るさ調整】プレイヤーの持つ懐中電灯の光量と照射距離を強化
+        const flashlight = new THREE.SpotLight(0xfff5dd, 4.5, 35, Math.PI / 3.8, 0.6, 1);
+        flashlight.castShadow = true;
+        scene.add(flashlight); scene.add(flashlight.target);
+
+        // ゴール光柱
+        const startBeam = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.4, 0.4, 20, 16, 1, true),
+            new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+        );
+        scene.add(startBeam);
+
+        // 日記オブジェクト
+        const diaryMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.7), new THREE.MeshStandardMaterial({ color: 0xcca444, roughness: 0.8 }));
+        const diaryLight = new THREE.PointLight(0xff9900, 2.0, 6);
+        scene.add(diaryMesh); scene.add(diaryLight);
+
+        // 灰色一色のシンプルコンクリートテクスチャ
+        function createPureGrayTexture() {
+            const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#4a4a4a'; ctx.fillRect(0, 0, 64, 64);
+            ctx.strokeStyle = '#3e3e3e'; ctx.lineWidth = 2;
+            ctx.strokeRect(0, 0, 64, 64);
+            return new THREE.CanvasTexture(canvas);
+        }
+        const wallTex = createPureGrayTexture();
+        const floorTex = createPureGrayTexture();
+
+        const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.8 });
+        const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.7 });
+        const ceilingMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.9 });
+
+        const wallGeom = new THREE.BoxGeometry(SCALE, 4.0, SCALE); 
+        const halfWallGeom = new THREE.BoxGeometry(SCALE, 1.5, SCALE); 
+
+        let wallGroup = new THREE.Group();
+        scene.add(wallGroup);
+
+        function buildMazeObjects() {
+            while(wallGroup.children.length > 0) { wallGroup.remove(wallGroup.children[0]); }
+            const mapW = mapData[0].length; const mapH = mapData.length;
+
+            const fMesh = new THREE.Mesh(new THREE.PlaneGeometry(mapW * SCALE, mapH * SCALE), floorMat);
+            fMesh.rotation.x = -Math.PI / 2; fMesh.position.set((mapW/2 - 0.5)*SCALE, 0, (mapH/2 - 0.5)*SCALE);
+            fMesh.receiveShadow = true; wallGroup.add(fMesh);
+
+            const cMesh = new THREE.Mesh(new THREE.PlaneGeometry(mapW * SCALE, mapH * SCALE), ceilingMat);
+            cMesh.rotation.x = Math.PI / 2; cMesh.position.set((mapW/2 - 0.5)*SCALE, 4.0, (mapH/2 - 0.5)*SCALE);
+            wallGroup.add(cMesh);
+
+            for (let z = 0; z < mapH; z++) {
+                for (let x = 0; x < mapW; x++) {
+                    const type = mapData[z][x];
+                    if (type === 1) {
+                        const wall = new THREE.Mesh(wallGeom, wallMat); wall.position.set(x * SCALE, 2.0, z * SCALE);
+                        wall.castShadow = true; wall.receiveShadow = true; wallGroup.add(wall);
+                    } else if (type === 2 || type === 3) {
+                        const lowWall = new THREE.Mesh(halfWallGeom, wallMat); lowWall.position.set(x * SCALE, 0.75, z * SCALE);
+                        lowWall.castShadow = true; lowWall.receiveShadow = true; wallGroup.add(lowWall);
+                    }
+                }
+            }
+            startBeam.position.set(config.startGrid.x * SCALE, 10, config.startGrid.z * SCALE);
+            diaryMesh.position.set(config.diaryGrid.x * SCALE, 0.3, config.diaryGrid.z * SCALE);
+            diaryLight.position.set(config.diaryGrid.x * SCALE, 0.6, config.diaryGrid.z * SCALE);
+            diaryMesh.visible = true; diaryLight.visible = true;
+        }
+
+        // --- 敵（クロセ）の設定 ---
+        const chaserMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 2.6, 16), new THREE.MeshBasicMaterial({ color: 0xff0033, wireframe: true }));
+        scene.add(chaserMesh);
+        const chaserLight = new THREE.PointLight(0xff0033, 4.0, 10); // クロセ自体の赤色光も少し強化
+        scene.add(chaserLight);
+
+        let chaserPos = { x: 0, z: 0 };
+        let chaserSpeed = 0.040; 
+
+        function initChaserPosition() {
+            chaserPos.x = (mapData[0].length - 2) * SCALE; chaserPos.z = 1 * SCALE;
+            chaserMesh.position.set(chaserPos.x, 1.3, chaserPos.z);
+            chaserLight.position.set(chaserPos.x, 1.8, chaserPos.z);
+        }
+
+        // --- プレイヤー変数＆操作 ---
+        let playerPos = { x: 0, z: 0, y: 1.5 };
+        let yaw = 0, pitch = 0;
+        const keys = {};
+
+        function resetPlayer() {
+            playerPos.x = config.startGrid.x * SCALE; playerPos.z = config.startGrid.z * SCALE; playerPos.y = 1.5;
+            yaw = 0; pitch = 0; stamina = 100; staminaExhausted = false;
+            lastYaw = 0;
+            camera.position.set(playerPos.x, playerPos.y, playerPos.z);
+            camera.rotation.set(0,0,0);
+            document.getElementById('stamina-bar').style.width = '100%';
+            document.getElementById('stamina-bar').style.background = '#00ffaa';
+            document.getElementById('chaser-speech-overlay').style.display = 'none';
+            isChaserLookingAtPlayer = false;
+        }
+
+        // 視点操作マウスルック ＆ 180度振り返り15%確率急襲システム
+        window.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement === document.body && gameActive && !isDead) {
+                yaw -= e.movementX * 0.0025;
+                pitch -= e.movementY * 0.0025;
+                pitch = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, pitch));
+                
+                camera.rotation.set(pitch, yaw, 0, 'YXZ');
+
+                let angleDiff = Math.abs(yaw - lastYaw);
+                if (angleDiff > 1.2 && hasDiary) { 
+                    if (Math.random() < 0.15) { 
+                        let frontX = playerPos.x - Math.sin(yaw) * (SCALE * 1.5);
+                        let frontZ = playerPos.z - Math.cos(yaw) * (SCALE * 1.5);
+                        
+                        let gX = Math.round(frontX / SCALE);
+                        let gZ = Math.round(frontZ / SCALE);
+                        if (gX >= 0 && gX < mapData[0].length && gZ >= 0 && gZ < mapData.length && mapData[gZ][gX] === 0) {
+                            chaserPos.x = frontX;
+                            chaserPos.z = frontZ;
+                        }
+                    }
+                }
+                lastYaw = yaw;
+            }
+        });
+
+        window.addEventListener('keydown', (e) => { keys[e.code] = true; });
+        window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+        // 移動処理
+        function updatePlayerMovement(time) {
+            if (!gameActive || isDead) return;
+
+            isSprinting = keys['ShiftLeft'] || keys['ShiftRight'];
+            if (staminaExhausted) isSprinting = false;
+
+            let baseSpeed = 0.034; 
+            if (isSprinting && (keys['KeyW'] || keys['KeyS'] || keys['KeyA'] || keys['KeyD'])) {
+                baseSpeed = 0.065; 
+                stamina = Math.max(0, stamina - 0.7);
+                if (stamina === 0) staminaExhausted = true;
+            } else {
+                stamina = Math.min(100, stamina + 0.12);
+                if (stamina > 20) staminaExhausted = false;
+            }
+            
+            document.getElementById('stamina-bar').style.width = stamina + '%';
+            document.getElementById('stamina-bar').style.background = staminaExhausted ? '#ff3333' : '#00ffaa';
+
+            let forwardX = -Math.sin(yaw); let forwardZ = -Math.cos(yaw);
+            let rightX = Math.cos(yaw); let rightZ = -Math.sin(yaw);
+
+            let moveX = 0, moveZ = 0;
+            if (keys['KeyW']) { moveX += forwardX; moveZ += forwardZ; }
+            if (keys['KeyS']) { moveX -= forwardX; moveZ -= forwardZ; }
+            if (keys['KeyA']) { moveX -= rightX; moveZ -= rightZ; }
+            if (keys['KeyD']) { moveX += rightX; moveZ += rightZ; }
+
+            if (moveX !== 0 || moveZ !== 0) {
+                const len = Math.sqrt(moveX * moveX + moveZ * moveZ);
+                const nextX = playerPos.x + (moveX / len) * baseSpeed * SCALE;
+                const nextZ = playerPos.z + (moveZ / len) * baseSpeed * SCALE;
+
+                const radius = SCALE * 0.25;
+                let curGridX = Math.round(playerPos.x / SCALE);
+                let curGridZ = Math.round(playerPos.z / SCALE);
+                let nextGridX = Math.round((nextX + Math.sign(moveX)*radius) / SCALE);
+                let nextGridZ = Math.round((nextZ + Math.sign(moveZ)*radius) / SCALE);
+
+                if (checkPassable(curGridX, curGridZ, nextGridX, curGridZ, nextX - playerPos.x, 0)) playerPos.x = nextX;
+                if (checkPassable(curGridX, curGridZ, curGridX, nextGridZ, 0, nextZ - playerPos.z)) playerPos.z = nextZ;
+
+                let stepInterval = isSprinting ? 0.3 : 0.52; 
+                if (time > nextPlayerFootTime) {
+                    playPlayerFootstep(isSprinting);
+                    nextPlayerFootTime = time + stepInterval;
+                }
+            }
+
+            camera.position.set(playerPos.x, playerPos.y, playerPos.z);
+            flashlight.position.copy(camera.position);
+            const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            flashlight.target.position.copy(camera.position).add(dir);
+        }
+
+        function checkPassable(cx, cz, nx, nz, dx, dz) {
+            if (nx < 0 || nx >= mapData[0].length || nz < 0 || nz >= mapData.length) return false;
+            const targetCell = mapData[nz][nx];
+            if (targetCell === 0) return true;
+            if (targetCell === 1) return false;
+            if (targetCell === 2) return (cz < nz && dz > 0);
+            if (targetCell === 3) return (cz > nz && dz < 0);
+            return false;
+        }
+
+        // 🛠️ 【バグ修正】レイキャスト（目視判定）のタイポアルゴリズムを完璧に修正
+        function checkLineOfSight() {
+            let pGX = Math.round(playerPos.x / SCALE);
+            let pGZ = Math.round(playerPos.z / SCALE);
+            let cGX = Math.round(chaserPos.x / SCALE);
+            let cGZ = Math.round(chaserPos.z / SCALE);
+
+            let dx = Math.abs(pGX - cGX);
+            let dy = Math.abs(pGZ - cGZ);
+            let sx = (cGX < pGX) ? 1 : -1;
+            let sy = (cGZ < pGZ) ? 1 : -1;
+            let err = dx - dy;
+
+            let x = cGX;
+            let z = cGZ; // 縦軸の基準を元の変数名 z に統一
+
+            while (true) {
+                if (x === pGX && z === pGZ) break;
+                if (x >= 0 && x < mapData[0].length && z >= 0 && z < mapData.length) {
+                    if (mapData[z][x] === 1) return false; 
+                }
+                let e2 = 2 * err;
+                if (e2 > -dy) { err -= dy; x += sx; }
+                if (e2 < dx) { err += dx; z += sy; }
+            }
+            return true; 
+        }
+
+        // クロセ追跡AI ＆ 恐怖演出
+        function updateChaserAI(time) {
+            // 🛠️ 【バグ修正】日記入手後にクロセが透明化しないように表示フラグ構造を完全にクリーン化
+            if (!hasDiary) {
+                chaserMesh.visible = false;
+                chaserLight.visible = false;
+                return;
+            }
+            
+            if (isDead || !gameActive) return;
+
+            chaserMesh.visible = true; 
+            chaserLight.visible = true;
+
+            const diffX = playerPos.x - chaserPos.x;
+            const diffZ = playerPos.z - chaserPos.z;
+            const dist = Math.sqrt(diffX*diffX + diffZ*diffZ);
+
+            document.getElementById('yusei-alert').style.display = (dist < SCALE * 4.0) ? 'block' : 'none';
+
+            // 直接目視による厳選5選ランダムワード表示ロジック
+            if (checkLineOfSight() && dist < SCALE * 8.0) {
+                if (!isChaserLookingAtPlayer) {
+                    const randomIndex = Math.floor(Math.random() * horrorVoices.length);
+                    document.getElementById('chaser-speech-overlay').innerText = horrorVoices[randomIndex];
+                    isChaserLookingAtPlayer = true;
+                }
+                document.getElementById('chaser-speech-overlay').style.display = 'block';
+            } else {
+                document.getElementById('chaser-speech-overlay').style.display = 'none';
+                isChaserLookingAtPlayer = false;
+            }
+
+            const body = document.getElementById('game-body');
+            if (dist < SCALE * 3.0) {
+                document.getElementById('curse-overlay').style.display = 'flex';
+                document.getElementById('curse-ghost').style.opacity = (1.0 - (dist / (SCALE*3.0))) * 0.8;
+                if(dist < SCALE * 1.5) body.classList.add('glitch-active');
+                else body.classList.remove('glitch-active');
+            } else {
+                document.getElementById('curse-overlay').style.display = 'none';
+                body.classList.remove('glitch-active');
+            }
+
+            if (audioCtx) {
+                let heartbeatInterval = Math.max(0.3, Math.min(1.2, dist * 0.15));
+                if (time > nextHeartbeatTime) {
+                    let vol = Math.max(0.1, 1.0 - (dist / (SCALE*6)));
+                    playHeartbeat(vol); nextHeartbeatTime = time + heartbeatInterval;
+                }
+                if (time > nextChaserFootTime) {
+                    let vol = Math.max(0.0, 1.0 - (dist / (SCALE*5)));
+                    if(vol > 0.05) playChaserFootstep(vol);
+                    nextChaserFootTime = time + 0.4;
+                }
+            }
+
+            if (dist < 0.8) { triggerGameOver(); return; }
+
+            let mx = 0, mz = 0;
+            if (Math.abs(diffX) > Math.abs(diffZ)) mx = Math.sign(diffX);
+            else mz = Math.sign(diffZ);
+
+            let actualSpeed = chaserSpeed * SCALE;
+            let nX = chaserPos.x + mx * actualSpeed;
+            let nZ = chaserPos.z + mz * actualSpeed;
+
+            let cGX = Math.round(chaserPos.x / SCALE);
+            let cGZ = Math.round(chaserPos.z / SCALE);
+            let nGX = Math.round(nX / SCALE);
+            let nGZ = Math.round(nZ / SCALE);
+
+            let moved = false;
+            if (mx !== 0 && checkPassable(cGX, cGZ, nGX, cGZ, mx, 0)) { chaserPos.x = nX; moved = true; }
+            if (!moved && mz !== 0 && checkPassable(cGX, cGZ, cGX, nGZ, 0, mz)) { chaserPos.z = nZ; moved = true; }
+
+            if (!moved) {
+                if (mx !== 0) {
+                    let altZ = Math.sign(diffZ) || 1;
+                    if(checkPassable(cGX, cGZ, cGX, Math.round((chaserPos.z + altZ*actualSpeed)/SCALE), 0, altZ)) chaserPos.z += altZ * actualSpeed;
+                } else {
+                    let altX = Math.sign(diffX) || 1;
+                    if(checkPassable(cGX, cGZ, Math.round((chaserPos.x + altX*actualSpeed)/SCALE), cGZ, altX, 0)) chaserPos.x += altX * actualSpeed;
+                }
+            }
+
+            chaserMesh.position.set(chaserPos.x, 1.3, chaserPos.z);
+            chaserLight.position.set(chaserPos.x, 1.8, chaserPos.z);
+        }
+
+        // --- イベント判定 ---
+        function checkDiaryPickup() {
+            if (!gameActive || hasDiary || isDead) return;
+            let pGX = Math.round(playerPos.x / SCALE);
+            let pGZ = Math.round(playerPos.z / SCALE);
+            if (pGX === config.diaryGrid.x && pGZ === config.diaryGrid.z) {
+                gameActive = false; document.exitPointerLock();
+                document.getElementById('diary-content').innerText = diaryTexts[currentFloor];
+                document.getElementById('diary-overlay').style.display = 'flex';
+            }
+        }
+
+        document.getElementById('diary-close-btn').addEventListener('click', () => {
+            document.getElementById('diary-overlay').style.display = 'none';
+            hasDiary = true; diaryMesh.visible = false; diaryLight.visible = false;
+            gameActive = true; document.body.requestPointerLock();
+            if (currentFloor === 1) chaserSpeed = 0.038;
+            if (currentFloor === 2) chaserSpeed = 0.040; 
+            if (currentFloor === 3) chaserSpeed = 0.045;
+        });
+
+        function checkEscape() {
+            if (!gameActive || !hasDiary || isDead) return;
+            let pGX = Math.round(playerPos.x / SCALE);
+            let pGZ = Math.round(playerPos.z / SCALE);
+            if (pGX === config.startGrid.x && pGZ === config.startGrid.z) {
+                gameActive = false; document.exitPointerLock();
+                if (currentFloor < 3) {
+                    showOverlay(`【第 ${currentFloor} 階層 脱出成功】<br><br>無事に日記を回収した。しかし上の階から更なる怨念が押し寄せてきている…！`, "未知の上の階へ進む", () => {
+                        currentFloor++; nextFloorInit();
+                    });
+                } else {
+                    showOverlay("<span style='color:#00ff44; font-size:30px;'>【廃病院 完全脱出成功】</span><br><br>すべての謎を解き明かし、凄惨な追跡を撒いて生還を遂げた！", "最初から再挑戦する", () => {
+                        currentFloor = 1; nextFloorInit();
+                    });
+                }
+            }
+        }
+
+        function nextFloorInit() {
+            mapData = mazes[currentFloor]; config = floorConfigs[currentFloor];
+            hasDiary = false; isDead = false;
+            document.getElementById('floor-display').innerText = `【現在位置: 廃病院 ${currentFloor}階】`;
+            document.getElementById('yusei-alert').style.display = 'none';
+            document.getElementById('curse-overlay').style.display = 'none';
+            document.getElementById('chaser-speech-overlay').style.display = 'none';
+            document.getElementById('game-body').classList.remove('glitch-active');
+            isChaserLookingAtPlayer = false;
+            
+            buildMazeObjects(); resetPlayer(); initChaserPosition();
+            gameActive = true; document.body.requestPointerLock();
+        }
+
+        function triggerGameOver() {
+            isDead = true; gameActive = false; document.exitPointerLock();
+            document.getElementById('curse-overlay').style.display = 'flex';
+            document.getElementById('curse-ghost').style.opacity = '1.0';
+            document.getElementById('chaser-speech-overlay').style.display = 'none';
+            document.getElementById('game-body').classList.add('glitch-active');
+
+            setTimeout(() => {
+                showOverlay("<span style='color:#ff0000; font-size:38px; letter-spacing:5px;'>精神崩壊</span><br><br>「ゆうせい」の狂気に囚われた…。", "再挑戦", () => {
+                    nextFloorInit();
+                });
+            }, 700);
+        }
+
+        function showOverlay(htmlText, btnText, callback) {
+            const overlay = document.getElementById('screen-overlay');
+            const msg = document.getElementById('msg');
+            const btn = document.getElementById('action-btn');
+            msg.innerHTML = htmlText; btn.innerText = btnText; overlay.style.display = 'flex';
+            const newBtn = btn.cloneNode(true); btn.parentNode.replaceChild(newBtn, btn);
+            newBtn.addEventListener('click', () => { overlay.style.display = 'none'; callback(); });
+        }
+
+        // ミニマップ
+        const minimapCanvas = document.getElementById('minimap');
+        const mCtx = minimapCanvas.getContext('2d');
+        minimapCanvas.width = 160; minimapCanvas.height = 160;
+
+        function drawMinimap() {
+            mCtx.clearRect(0, 0, 160, 160);
+            const mapW = mapData[0].length; const mapH = mapData.length;
+            const cellSize = 160 / Math.max(mapW, mapH);
+
+            for (let z = 0; z < mapH; z++) {
+                for (let x = 0; x < mapW; x++) {
+                    const type = mapData[z][x];
+                    if (type === 1) mCtx.fillStyle = '#2a2a2a'; 
+                    else if (type === 2 || type === 3) mCtx.fillStyle = '#112233'; 
+                    else mCtx.fillStyle = '#050505';
+                    mCtx.fillRect(x * cellSize, z * cellSize, cellSize - 0.5, cellSize - 0.5);
+                }
+            }
+
+            mCtx.fillStyle = '#00bb66';
+            mCtx.fillRect(config.startGrid.x * cellSize, config.startGrid.z * cellSize, cellSize, cellSize);
+
+            if (!hasDiary) {
+                mCtx.fillStyle = '#ffff00'; mCtx.beginPath();
+                mCtx.arc((config.diaryGrid.x + 0.5) * cellSize, (config.diaryGrid.z + 0.5) * cellSize, cellSize * 0.4, 0, Math.PI * 2);
+                mCtx.fill();
+            }
+
+            let pX = (playerPos.x / SCALE) * cellSize;
+            let pZ = (playerPos.z / SCALE) * cellSize;
+            mCtx.fillStyle = '#00ff44'; mCtx.beginPath(); mCtx.arc(pX, pZ, 4, 0, Math.PI * 2); mCtx.fill();
+
+            if (hasDiary) {
+                let cX = (chaserPos.x / SCALE) * cellSize;
+                let cZ = (chaserPos.z / SCALE) * cellSize;
+                mCtx.fillStyle = '#ff0033'; mCtx.beginPath(); mCtx.arc(cX, cZ, 4, 0, Math.PI * 2); mCtx.fill();
+            }
+        }
+
+        // --- メインループ ---
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const totalTime = clock.getElapsedTime();
+
+            if (gameActive) {
+                updatePlayerMovement(totalTime);
+                updateChaserAI(totalTime);
+                checkDiaryPickup();
+                checkEscape();
+            }
+
+            if (diaryMesh.visible) {
+                diaryMesh.rotation.y += 0.02;
+                diaryMesh.position.y = 0.3 + Math.sin(totalTime * 3.5) * 0.05;
+            }
+
+            renderer.render(scene, camera);
+            drawMinimap();
+        }
+
+        // --- 初期開始ボタン ---
+        document.getElementById('start-btn').addEventListener('click', () => {
+            initAudio();
+            document.getElementById('start-screen').style.display = 'none';
+            nextFloorInit();
+            animate();
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
